@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coletor de Coordenadas - Hidrômetros</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-gray-100 min-h-screen font-sans pb-28 selection:bg-[#0056b3] selection:text-white">
+
+    <!-- ===================== TELA PRINCIPAL ===================== -->
+    <div id="tela-principal" class="max-w-md mx-auto p-4">
+
+        <!-- MENU LATERAL -->
+        <div id="menu-overlay" onclick="fecharMenuLateral()" class="hidden fixed inset-0 bg-black/60 z-40"></div>
+        <aside id="menu-lateral" class="fixed top-0 left-0 h-full w-72 max-w-[80%] bg-slate-800 border-r border-slate-700 shadow-2xl z-50 -translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-slate-700">
+                <p class="text-sm font-bold text-white">Menu</p>
+                <button onclick="fecharMenuLateral()" class="text-gray-400 hover:text-white text-2xl px-2" title="Fechar menu">&times;</button>
+            </div>
+            <div class="p-4 border-b border-slate-700">
+                <label class="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Nome do leiturista</label>
+                <input type="text" id="input-leiturista" onchange="salvarNomeLeiturista()" placeholder="Seu nome ou matrícula" class="w-full p-3 rounded-lg bg-slate-950 border border-slate-600 focus:border-[#0056b3] focus:outline-none text-sm text-white">
+            </div>
+            <nav class="flex flex-col gap-2 p-4">
+                <button onclick="acaoMenu(exportarZIP)" class="w-full flex items-center gap-3 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg text-sm font-semibold text-left">
+                    <i class="fa-solid fa-file-zipper w-5 text-center"></i> Exportar ZIP agora
+                </button>
+                <button onclick="acaoMenu(escolherNovaPlanilha)" class="w-full flex items-center gap-3 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg text-sm font-semibold text-left">
+                    <i class="fa-solid fa-file-excel w-5 text-center"></i> Carregar outra planilha
+                </button>
+            </nav>
+            <p class="mt-auto p-4 text-[11px] text-gray-500">Ao carregar outra planilha, o ZIP das coordenadas já capturadas é baixado automaticamente antes de substituir a lista.</p>
+        </aside>
+
+        <!-- CABEÇALHO -->
+        <div class="bg-slate-800/80 border border-slate-700 p-4 rounded-xl mb-4 shadow-md flex justify-between items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <button onclick="abrirMenuLateral()" class="shrink-0 bg-slate-700 hover:bg-slate-600 text-white w-10 h-10 rounded-lg shadow flex items-center justify-center" title="Menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="min-w-0">
+                    <h1 class="text-lg font-bold text-white leading-tight">Coletor de Coordenadas</h1>
+                    <p class="text-xs text-[#4da3ff] font-semibold">Hidrômetros</p>
+                </div>
+            </div>
+            <div id="painel-progresso" class="hidden shrink-0 text-right">
+                <p class="text-2xl font-extrabold text-[#4da3ff] leading-none"><span id="qtd-feitos">0</span><span class="text-sm text-gray-400"> / <span id="qtd-total">0</span></span></p>
+                <p class="text-[10px] text-gray-500 uppercase tracking-wider">feitos</p>
+            </div>
+        </div>
+
+        <!-- CARREGAR PLANILHA -->
+        <div id="area-upload" class="bg-slate-800 p-4 rounded-xl border border-dashed border-slate-600 mb-4 text-center">
+            <p class="text-sm font-medium text-gray-300 mb-1">Carregue a lista de endereços (.xlsx ou .csv)</p>
+            <p class="text-[11px] text-gray-500 mb-3">Colunas esperadas: Codigo do Fornecimento, Endereço e Hidrômetro.</p>
+            <input type="file" id="input-excel" accept=".xlsx,.xls,.csv" class="hidden">
+            <button onclick="document.getElementById('input-excel').click()" class="w-full py-3 px-4 rounded-lg bg-[#0056b3] hover:bg-blue-800 font-bold text-sm shadow-lg text-white">
+                📊 Carregar Planilha
+            </button>
+        </div>
+
+        <!-- BUSCA E FILTROS -->
+        <div id="area-pesquisa" class="hidden mb-3">
+            <input type="text" id="input-pesquisa" oninput="renderizarLista()" placeholder="🔍 Endereço, hidrômetro ou fornecimento..." class="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:outline-none focus:border-[#0056b3] shadow-md text-sm">
+            <div class="flex gap-2 mt-2">
+                <button id="filtro-todos" onclick="definirFiltro('todos')" class="flex-1 py-2 rounded-lg text-xs font-bold border">Todos</button>
+                <button id="filtro-pendentes" onclick="definirFiltro('pendentes')" class="flex-1 py-2 rounded-lg text-xs font-bold border">Pendentes</button>
+                <button id="filtro-feitos" onclick="definirFiltro('feitos')" class="flex-1 py-2 rounded-lg text-xs font-bold border">Feitos</button>
+            </div>
+        </div>
+
+        <div id="lista-itens" class="space-y-3"></div>
+        <p id="aviso-limite" class="hidden text-center text-xs text-gray-500 mt-4"></p>
+
+        <!-- BARRA FIXA: EXPORTAR -->
+        <div id="area-exportacao" class="hidden fixed bottom-0 left-0 right-0 p-4 bg-slate-900 border-t border-slate-700 shadow-[0_-10px_15px_rgba(0,0,0,0.5)]">
+            <button id="btn-exportar-zip" onclick="exportarZIP()" class="w-full max-w-md mx-auto block py-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-lg tracking-wide text-lg">
+                📦 EXPORTAR COORDENADAS (ZIP)
+            </button>
+        </div>
+    </div>
+
+    <!-- ===================== TELA DE CAPTURA ===================== -->
+    <div id="tela-captura" class="hidden max-w-md mx-auto p-4">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-bold text-white">Capturar coordenada</h2>
+            <button onclick="fecharCaptura()" class="text-gray-400 hover:text-white text-2xl px-2" title="Voltar">&times;</button>
+        </div>
+
+        <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 mb-4 text-xs space-y-1">
+            <p><span class="text-gray-400">Fornecimento:</span> <span id="cap-codigo" class="font-bold text-sm text-yellow-400"></span></p>
+            <p><span class="text-gray-400">Endereço:</span> <span id="cap-endereco" class="text-gray-200"></span></p>
+            <p><span class="text-gray-400">Hidrômetro:</span> <span id="cap-hidrometro" class="text-gray-200 font-semibold"></span></p>
+        </div>
+
+        <!-- PASSO 1: COORDENADA -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">1) Coordenada</p>
+            <p class="text-[11px] text-gray-500 mb-3">Fique <b>ao lado do hidrômetro</b>, de preferência em local aberto, com o aparelho parado.</p>
+
+            <button id="btn-capturar" onclick="iniciarCaptura()" class="w-full py-4 rounded-lg bg-[#0056b3] hover:bg-blue-700 font-bold text-base shadow-lg text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-location-crosshairs"></i> CAPTURAR COORDENADA
+            </button>
+
+            <!-- Painel ao vivo -->
+            <div id="painel-gps" class="hidden">
+                <ul class="space-y-2 text-sm mb-4">
+                    <li id="passo-1" class="flex items-center gap-2"><span id="ico-passo-1"></span><span>Ativando o GPS do aparelho</span></li>
+                    <li id="passo-2" class="flex items-center gap-2"><span id="ico-passo-2"></span><span>Recebendo sinal dos satélites</span></li>
+                    <li id="passo-3" class="flex items-center gap-2"><span id="ico-passo-3"></span><span>Refinando a precisão (não se mova)</span></li>
+                    <li id="passo-4" class="flex items-center gap-2"><span id="ico-passo-4"></span><span>Coordenada fixada</span></li>
+                </ul>
+
+                <div class="bg-slate-950 rounded-xl p-4 border border-slate-700 text-center">
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">Precisão atual</p>
+                    <p id="gps-precisao" class="text-4xl font-extrabold font-mono text-gray-300 my-1">--</p>
+                    <p id="gps-qualidade" class="text-xs font-bold text-gray-500 mb-2">Aguardando sinal...</p>
+                    <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden mb-3">
+                        <div id="gps-barra-precisao" class="h-3 rounded-full bg-gray-600 transition-all duration-300" style="width:5%"></div>
+                    </div>
+                    <p class="text-xs font-mono text-gray-300">Lat: <span id="gps-lat">--</span></p>
+                    <p class="text-xs font-mono text-gray-300">Long: <span id="gps-lng">--</span></p>
+                    <p class="text-[10px] text-gray-500 mt-2">Leituras recebidas: <span id="gps-leituras">0</span> · Tempo: <span id="gps-tempo">0</span>s</p>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-3">
+                    <div id="gps-barra-tempo" class="h-1.5 bg-[#0056b3] transition-all duration-200" style="width:0%"></div>
+                </div>
+                <p id="gps-mensagem" class="text-[11px] text-amber-400 text-center mt-2 min-h-[1rem]"></p>
+
+                <div class="flex gap-2 mt-3">
+                    <button onclick="cancelarCaptura()" class="w-1/3 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-xs">Cancelar</button>
+                    <button id="btn-fixar-agora" onclick="finalizarCaptura()" disabled class="w-2/3 py-3 rounded-lg bg-emerald-700 hover:bg-emerald-600 font-bold text-xs text-white disabled:opacity-40">Fixar melhor leitura agora</button>
+                </div>
+            </div>
+
+            <!-- Resultado -->
+            <div id="painel-resultado" class="hidden">
+                <div id="resultado-caixa" class="rounded-xl p-4 border-2 border-emerald-500 bg-emerald-500/10 text-center">
+                    <p class="text-lg font-extrabold text-emerald-400"><i class="fa-solid fa-circle-check mr-1"></i> COORDENADA CAPTURADA</p>
+                    <p class="text-sm font-mono text-white mt-2">Lat: <span id="res-lat"></span></p>
+                    <p class="text-sm font-mono text-white">Long: <span id="res-lng"></span></p>
+                    <p class="text-sm mt-2">Precisão: <b id="res-precisao"></b> <span id="res-qualidade" class="font-bold"></span></p>
+                    <p class="text-[11px] text-gray-400 mt-1" id="res-data"></p>
+                    <p id="res-aviso" class="hidden text-xs text-amber-400 font-bold mt-2">⚠️ Precisão fraca. Vá para um local mais aberto e capture de novo.</p>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="abrirCoordenadaNoMapa()" class="w-1/2 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-xs flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-map-location-dot"></i> Conferir no mapa
+                    </button>
+                    <button onclick="iniciarCaptura()" class="w-1/2 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-xs flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i> Capturar de novo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASSO 2: FOTOS -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">2) Foto <span class="text-red-400">(obrigatória a foto 1)</span></p>
+            <div class="flex gap-2">
+                <div class="w-1/2">
+                    <input type="file" id="input-foto-1" accept="image/*" capture="environment" class="hidden" onchange="processarFoto(1)">
+                    <button id="btn-foto-1" onclick="document.getElementById('input-foto-1').click()" class="w-full py-3 rounded-lg bg-slate-950 border border-slate-600 font-bold text-xs text-gray-300">📸 Foto 1 (Hidrômetro)</button>
+                </div>
+                <div class="w-1/2">
+                    <input type="file" id="input-foto-2" accept="image/*" capture="environment" class="hidden" onchange="processarFoto(2)">
+                    <button id="btn-foto-2" onclick="document.getElementById('input-foto-2').click()" class="w-full py-3 rounded-lg bg-slate-950 border border-slate-600 font-bold text-xs text-gray-300">📸 Foto 2 (Fachada)</button>
+                </div>
+            </div>
+            <p id="status-foto" class="text-[10px] text-gray-500 mt-2 text-center">A foto recebe um carimbo com código, coordenada e data.</p>
+        </div>
+
+        <!-- PASSO 3: OBSERVAÇÃO -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">3) Observação (opcional)</p>
+            <textarea id="input-observacao" rows="2" class="w-full p-3 rounded-lg bg-slate-950 text-white text-sm border border-slate-700 focus:outline-none focus:border-[#0056b3] placeholder-gray-600" placeholder="Ex: hidrômetro no fundo do terreno, cavalete na calçada..."></textarea>
+            <label class="flex items-center gap-2 mt-3 text-xs text-gray-300 select-none">
+                <input type="checkbox" id="check-nao-localizado" onchange="alternarNaoLocalizado()" class="w-4 h-4">
+                Não consegui localizar o hidrômetro (exige observação)
+            </label>
+        </div>
+
+        <div class="flex gap-3">
+            <button onclick="fecharCaptura()" class="w-1/3 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-sm">Voltar</button>
+            <button id="btn-salvar" onclick="salvarCaptura()" class="w-2/3 py-3 rounded-lg bg-[#0056b3] hover:bg-blue-700 font-bold text-sm shadow-lg">💾 SALVAR</button>
+        </div>
+    </div>
+
+    <script>
+    // =================================================================
+    // ESTADO
+    // =================================================================
+    let db;
+    let itens = [];              // lista completa carregada da planilha
+    let itemAtual = null;        // item aberto na tela de captura
+    let filtroAtual = 'todos';
+    const LIMITE_LISTA = 100;    // evita renderizar 2000 cards de uma vez
+    const LEITURAS_ENTRE_BACKUPS = 15;
+    let salvamentosDesdeBackup = 0;
+
+    // captura GPS
+    const TEMPO_MIN_MS = 6000;
+    const TEMPO_MAX_MS = 25000;
+    const PRECISAO_OK_M = 8;
+    const PRECISAO_FRACA_M = 20;
+    let watchId = null, timerId = null, melhorLeitura = null, totalLeituras = 0, inicioCaptura = 0;
+    let coordFixada = null;      // {lat, lng, precisao, dataHora, leituras}
+    let wakeLock = null;
+
+    // fotos
+    let cacheFotos = { 1: null, 2: null };
+    let fotoNova = { 1: false, 2: false };
+
+    // =================================================================
+    // UTILIDADES
+    // =================================================================
+    const pausar = (ms) => new Promise(r => setTimeout(r, ms));
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function normalizar(t) {
+        return String(t == null ? '' : t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    function mostrarToast(texto, cor = 'bg-emerald-600', ms = 3500) {
+        const aviso = document.createElement('div');
+        aviso.className = `fixed bottom-24 left-4 right-4 max-w-md mx-auto ${cor} text-white p-3 rounded-lg text-center shadow-lg text-sm font-bold z-[60] transition-opacity duration-500`;
+        aviso.innerHTML = texto;
+        document.body.appendChild(aviso);
+        setTimeout(() => { aviso.style.opacity = '0'; setTimeout(() => aviso.remove(), 500); }, ms);
+    }
+    function classificarPrecisao(m) {
+        if (m <= 10) return { texto: 'EXCELENTE', cor: 'text-emerald-400', barra: 'bg-emerald-500' };
+        if (m <= PRECISAO_FRACA_M) return { texto: 'BOA', cor: 'text-amber-400', barra: 'bg-amber-500' };
+        return { texto: 'FRACA', cor: 'text-red-400', barra: 'bg-red-500' };
+    }
+
+    // =================================================================
+    // BANCO LOCAL (INDEXEDDB)
+    // =================================================================
+    const conexaoBanco = indexedDB.open("ColetorCoordenadasDB", 1);
+    conexaoBanco.onupgradeneeded = (e) => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains("enderecos")) d.createObjectStore("enderecos", { keyPath: "id" });
+    };
+    conexaoBanco.onsuccess = (e) => { db = e.target.result; carregarListaDoBanco(); };
+    conexaoBanco.onerror = () => alert("Não foi possível abrir o banco local do aparelho.");
+
+    function carregarListaDoBanco() {
+        const req = db.transaction(["enderecos"], "readonly").objectStore("enderecos").getAll();
+        req.onsuccess = () => {
+            itens = (req.result || []).sort((a, b) => a.id - b.id);
+            atualizarTelaInicial();
+        };
+    }
+
+    function salvarItemNoBanco(item) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(["enderecos"], "readwrite");
+            tx.objectStore("enderecos").put(item);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error("Transação abortada"));
+        });
+    }
+
+    function substituirListaNoBanco(novos) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(["enderecos"], "readwrite");
+            const loja = tx.objectStore("enderecos");
+            loja.clear();
+            novos.forEach(i => loja.put(i));
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error("Transação abortada"));
+        });
+    }
+
+    async function solicitarArmazenamentoPersistente() {
+        if (navigator.storage && navigator.storage.persist) {
+            try { await navigator.storage.persist(); } catch (e) {}
+        }
+    }
+    async function verificarEspacoArmazenamento() {
+        if (!(navigator.storage && navigator.storage.estimate)) return;
+        try {
+            const { usage, quota } = await navigator.storage.estimate();
+            const pct = quota ? (usage / quota) * 100 : 0;
+            if (pct >= 80) alert(`⚠️ O armazenamento do app está em ${pct.toFixed(0)}%.\n\nExporte o ZIP para não correr risco de perder leituras.`);
+        } catch (e) {}
+    }
+
+    // =================================================================
+    // MENU LATERAL
+    // =================================================================
+    function abrirMenuLateral() {
+        document.getElementById('menu-overlay').classList.remove('hidden');
+        document.getElementById('menu-lateral').classList.remove('-translate-x-full');
+    }
+    function fecharMenuLateral() {
+        document.getElementById('menu-lateral').classList.add('-translate-x-full');
+        document.getElementById('menu-overlay').classList.add('hidden');
+    }
+    function acaoMenu(fn) { fecharMenuLateral(); fn(); }
+    function salvarNomeLeiturista() {
+        localStorage.setItem('coletor_coord_leiturista', document.getElementById('input-leiturista').value.trim());
+    }
+    function nomeLeiturista() { return localStorage.getItem('coletor_coord_leiturista') || ''; }
+
+    // =================================================================
+    // CARGA DA PLANILHA
+    // =================================================================
+    function escolherNovaPlanilha() { document.getElementById('input-excel').click(); }
+
+    document.getElementById('input-excel').addEventListener('change', function (e) {
+        const arquivo = e.target.files[0];
+        if (!arquivo) return;
+        const leitor = new FileReader();
+        leitor.onload = async (evento) => {
+            try {
+                const wb = XLSX.read(new Uint8Array(evento.target.result), { type: 'array' });
+                const aba = wb.Sheets[wb.SheetNames[0]];
+                const linhas = XLSX.utils.sheet_to_json(aba, { header: 1, defval: "" });
+                const novos = interpretarLinhas(linhas);
+                if (novos.length === 0) return;
+
+                const jaTemFeitos = itens.some(i => i.status !== 'pendente');
+                if (itens.length > 0) {
+                    if (jaTemFeitos) await backupAntesDeSubstituir();
+                    const ok = confirm(`Substituir a lista atual (${itens.length} endereços) pela nova (${novos.length})?\n\nAs coordenadas já capturadas serão removidas do aparelho (o ZIP de backup foi baixado).`);
+                    if (!ok) return;
+                }
+                await substituirListaNoBanco(novos);
+                itens = novos;
+                atualizarTelaInicial();
+                mostrarToast(`✅ ${novos.length} endereços carregados.`);
+            } catch (erro) {
+                console.error(erro);
+                alert("Não foi possível ler a planilha. Verifique se o arquivo está correto.");
+            } finally {
+                e.target.value = '';
+            }
+        };
+        leitor.readAsArrayBuffer(arquivo);
+    });
+
+    // Procura a linha de cabeçalho (nas 10 primeiras) e mapeia as colunas por nome
+    function interpretarLinhas(linhas) {
+        let idxCab = -1, iCod = -1, iEnd = -1, iHd = -1;
+        for (let r = 0; r < Math.min(10, linhas.length); r++) {
+            const cel = linhas[r].map(normalizar);
+            const c = cel.findIndex(t => t.includes('fornecimento') || t === 'codigo');
+            if (c !== -1) {
+                idxCab = r; iCod = c;
+                iEnd = cel.findIndex(t => t.includes('endereco'));
+                iHd = cel.findIndex(t => t.includes('hidrometro'));
+                break;
+            }
+        }
+        if (idxCab === -1 || iEnd === -1) {
+            alert("Não encontrei o cabeçalho. A planilha precisa ter as colunas 'Codigo do Fornecimento' e 'Endereço' (e 'Hidrômetro').");
+            return [];
+        }
+        const novos = [];
+        for (let r = idxCab + 1; r < linhas.length; r++) {
+            const linha = linhas[r];
+            const codigo = String(linha[iCod] == null ? '' : linha[iCod]).trim();
+            if (codigo === '') continue;
+            const endereco = String(linha[iEnd] == null ? '' : linha[iEnd]).trim() || '-';
+            const hidrometro = iHd !== -1 ? (String(linha[iHd] == null ? '' : linha[iHd]).trim() || '-') : '-';
+            novos.push({
+                id: novos.length,
+                codigo, endereco, hidrometro,
+                busca: normalizar(`${codigo} ${endereco} ${hidrometro}`),
+                status: 'pendente',     // pendente | capturado | nao_localizado
+                latitude: null, longitude: null, precisao: null, dataHora: null,
+                observacao: '', foto1: null, foto2: null
+            });
+        }
+        if (novos.length === 0) alert("Nenhuma linha com código de fornecimento foi encontrada.");
+        return novos;
+    }
+
+    // =================================================================
+    // LISTA, BUSCA E FILTROS
+    // =================================================================
+    function atualizarTelaInicial() {
+        const temDados = itens.length > 0;
+        document.getElementById('area-upload').classList.toggle('hidden', temDados);
+        document.getElementById('area-pesquisa').classList.toggle('hidden', !temDados);
+        document.getElementById('area-exportacao').classList.toggle('hidden', !temDados);
+        document.getElementById('painel-progresso').classList.toggle('hidden', !temDados);
+        document.getElementById('input-leiturista').value = nomeLeiturista();
+        definirFiltro(filtroAtual);
+    }
+
+    function definirFiltro(f) {
+        filtroAtual = f;
+        ['todos', 'pendentes', 'feitos'].forEach(n => {
+            const b = document.getElementById('filtro-' + n);
+            const ativo = n === f;
+            b.className = `flex-1 py-2 rounded-lg text-xs font-bold border ${ativo ? 'bg-[#0056b3] border-[#0056b3] text-white' : 'bg-slate-800 border-slate-600 text-gray-300'}`;
+        });
+        renderizarLista();
+    }
+
+    function renderizarLista() {
+        const container = document.getElementById('lista-itens');
+        const aviso = document.getElementById('aviso-limite');
+        const feitos = itens.filter(i => i.status !== 'pendente').length;
+        document.getElementById('qtd-feitos').innerText = feitos;
+        document.getElementById('qtd-total').innerText = itens.length;
+
+        if (itens.length === 0) {
+            container.innerHTML = '';
+            aviso.classList.add('hidden');
+            return;
+        }
+
+        const termos = normalizar(document.getElementById('input-pesquisa').value).split(' ').filter(Boolean);
+        const filtrados = [];
+        for (const item of itens) {
+            if (filtroAtual === 'pendentes' && item.status !== 'pendente') continue;
+            if (filtroAtual === 'feitos' && item.status === 'pendente') continue;
+            if (termos.length && !termos.every(t => item.busca.includes(t))) continue;
+            filtrados.push(item);
+        }
+
+        const mostrados = filtrados.slice(0, LIMITE_LISTA);
+        container.innerHTML = mostrados.map(item => {
+            let borda = 'border-[#0056b3]', selo = '';
+            if (item.status === 'capturado') {
+                const q = classificarPrecisao(item.precisao);
+                borda = 'border-emerald-500';
+                selo = `<span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full font-bold">📍 ±${Math.round(item.precisao)} m</span>`;
+                if (item.precisao > PRECISAO_FRACA_M) selo = `<span class="text-[10px] bg-amber-500/20 ${q.cor} px-2 py-1 rounded-full font-bold">⚠️ ±${Math.round(item.precisao)} m</span>`;
+            } else if (item.status === 'nao_localizado') {
+                borda = 'border-red-500';
+                selo = '<span class="text-[10px] bg-red-500/20 text-red-400 px-2 py-1 rounded-full font-bold">NÃO LOCALIZADO</span>';
+            }
+            return `
+            <div data-id="${item.id}" class="card-item bg-slate-800 p-5 rounded-2xl shadow-lg border-l-8 ${borda} cursor-pointer active:scale-[0.98] transition-transform">
+                <div class="flex justify-between items-start mb-2 gap-2">
+                    <span class="text-xs font-bold uppercase tracking-widest text-blue-400">Fornec.: ${esc(item.codigo)}</span>
+                    ${selo}
+                </div>
+                <h3 class="text-lg font-extrabold text-white leading-tight mb-3">${esc(item.endereco)}</h3>
+                <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                    <p class="text-[10px] text-gray-400 uppercase">Hidrômetro</p>
+                    <p class="text-sm font-mono font-bold text-white">${esc(item.hidrometro)}</p>
+                </div>
+            </div>`;
+        }).join('');
+
+        if (filtrados.length === 0) {
+            container.innerHTML = '<p class="text-center text-sm text-gray-500 italic mt-8">Nada encontrado com esses filtros.</p>';
+        }
+        if (filtrados.length > LIMITE_LISTA) {
+            aviso.innerText = `Mostrando ${LIMITE_LISTA} de ${filtrados.length}. Digite no campo de busca para refinar.`;
+            aviso.classList.remove('hidden');
+        } else {
+            aviso.classList.add('hidden');
+        }
+    }
+
+    document.getElementById('lista-itens').addEventListener('click', (e) => {
+        const card = e.target.closest('.card-item');
+        if (card) abrirCaptura(parseInt(card.dataset.id, 10));
+    });
+
+    // =================================================================
+    // TELA DE CAPTURA
+    // =================================================================
+    function abrirCaptura(id) {
+        itemAtual = itens.find(i => i.id === id);
+        if (!itemAtual) return;
+
+        document.getElementById('cap-codigo').innerText = itemAtual.codigo;
+        document.getElementById('cap-endereco').innerText = itemAtual.endereco;
+        document.getElementById('cap-hidrometro').innerText = itemAtual.hidrometro;
+        document.getElementById('input-observacao').value = itemAtual.observacao || '';
+        document.getElementById('check-nao-localizado').checked = itemAtual.status === 'nao_localizado';
+        document.getElementById('input-foto-1').value = '';
+        document.getElementById('input-foto-2').value = '';
+
+        cacheFotos = { 1: itemAtual.foto1, 2: itemAtual.foto2 };
+        fotoNova = { 1: false, 2: false };
+        configurarBotaoFoto(1);
+        configurarBotaoFoto(2);
+
+        pararCaptura();
+        document.getElementById('painel-gps').classList.add('hidden');
+        document.getElementById('btn-capturar').classList.remove('hidden');
+        if (itemAtual.status === 'capturado' && itemAtual.latitude != null) {
+            coordFixada = { lat: itemAtual.latitude, lng: itemAtual.longitude, precisao: itemAtual.precisao, dataHora: itemAtual.dataHora, leituras: null };
+            mostrarResultado();
+        } else {
+            coordFixada = null;
+            document.getElementById('painel-resultado').classList.add('hidden');
+        }
+        alternarNaoLocalizado();
+
+        document.getElementById('tela-principal').classList.add('hidden');
+        document.getElementById('tela-captura').classList.remove('hidden');
+        window.scrollTo(0, 0);
+    }
+
+    function fecharCaptura() {
+        pararCaptura();
+        itemAtual = null;
+        document.getElementById('tela-captura').classList.add('hidden');
+        document.getElementById('tela-principal').classList.remove('hidden');
+        renderizarLista();
+    }
+
+    function alternarNaoLocalizado() {
+        const naoLoc = document.getElementById('check-nao-localizado').checked;
+        document.getElementById('btn-capturar').disabled = naoLoc;
+        document.getElementById('btn-capturar').classList.toggle('opacity-40', naoLoc);
+    }
+
+    // ---- GPS passo a passo ----
+    function setPasso(n) {
+        // n: passo ativo (1-4). n=5 => todos concluídos
+        for (let i = 1; i <= 4; i++) {
+            const ico = document.getElementById('ico-passo-' + i);
+            const li = document.getElementById('passo-' + i);
+            if (i < n) {
+                ico.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+                li.className = 'flex items-center gap-2 text-emerald-300';
+            } else if (i === n) {
+                ico.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-amber-400"></i>';
+                li.className = 'flex items-center gap-2 text-white font-semibold';
+            } else {
+                ico.innerHTML = '<i class="fa-regular fa-circle text-gray-600"></i>';
+                li.className = 'flex items-center gap-2 text-gray-500';
+            }
+        }
+    }
+
+    async function pedirWakeLock() {
+        try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+    }
+    function soltarWakeLock() {
+        try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+    }
+
+    function iniciarCaptura() {
+        if (!navigator.geolocation) { alert("Este navegador não suporta geolocalização."); return; }
+        pararCaptura();
+        melhorLeitura = null; totalLeituras = 0; coordFixada = null;
+        inicioCaptura = Date.now();
+
+        document.getElementById('btn-capturar').classList.add('hidden');
+        document.getElementById('painel-resultado').classList.add('hidden');
+        document.getElementById('painel-gps').classList.remove('hidden');
+        document.getElementById('gps-precisao').innerText = '--';
+        document.getElementById('gps-precisao').className = 'text-4xl font-extrabold font-mono text-gray-300 my-1';
+        document.getElementById('gps-qualidade').innerText = 'Aguardando sinal...';
+        document.getElementById('gps-qualidade').className = 'text-xs font-bold text-gray-500 mb-2';
+        document.getElementById('gps-lat').innerText = '--';
+        document.getElementById('gps-lng').innerText = '--';
+        document.getElementById('gps-leituras').innerText = '0';
+        document.getElementById('gps-tempo').innerText = '0';
+        document.getElementById('gps-mensagem').innerText = '';
+        document.getElementById('gps-barra-precisao').style.width = '5%';
+        document.getElementById('gps-barra-precisao').className = 'h-3 rounded-full bg-gray-600 transition-all duration-300';
+        document.getElementById('gps-barra-tempo').style.width = '0%';
+        document.getElementById('btn-fixar-agora').disabled = true;
+        setPasso(1);
+
+        pedirWakeLock();
+        watchId = navigator.geolocation.watchPosition(aoReceberPosicao, aoErrarPosicao, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+        timerId = setInterval(tickCaptura, 250);
+        setTimeout(() => { if (watchId !== null && totalLeituras === 0) setPasso(2); }, 800);
+    }
+
+    function aoReceberPosicao(pos) {
+        const c = pos.coords;
+        totalLeituras++;
+        if (!melhorLeitura || c.accuracy < melhorLeitura.precisao) {
+            melhorLeitura = { lat: c.latitude, lng: c.longitude, precisao: c.accuracy };
+        }
+        setPasso(3);
+        const q = classificarPrecisao(c.accuracy);
+        const elPrec = document.getElementById('gps-precisao');
+        elPrec.innerText = `±${Math.round(c.accuracy)} m`;
+        elPrec.className = `text-4xl font-extrabold font-mono my-1 ${q.cor}`;
+        const elQ = document.getElementById('gps-qualidade');
+        elQ.innerText = q.texto;
+        elQ.className = `text-xs font-bold mb-2 ${q.cor}`;
+        const pct = Math.max(5, Math.min(100, 100 * (1 - c.accuracy / 40)));
+        const barra = document.getElementById('gps-barra-precisao');
+        barra.style.width = pct + '%';
+        barra.className = `h-3 rounded-full transition-all duration-300 ${q.barra}`;
+        document.getElementById('gps-lat').innerText = c.latitude.toFixed(6);
+        document.getElementById('gps-lng').innerText = c.longitude.toFixed(6);
+        document.getElementById('gps-leituras').innerText = totalLeituras;
+        document.getElementById('gps-mensagem').innerText = '';
+    }
+
+    function aoErrarPosicao(erro) {
+        if (erro.code === 1) {
+            pararCaptura();
+            document.getElementById('painel-gps').classList.add('hidden');
+            document.getElementById('btn-capturar').classList.remove('hidden');
+            alert("O app não tem permissão para usar a localização. Libere o GPS nas configurações do navegador e tente de novo.");
+            return;
+        }
+        document.getElementById('gps-mensagem').innerText = 'Sem sinal de GPS no momento. Vá para um local mais aberto...';
+    }
+
+    function tickCaptura() {
+        const decorrido = Date.now() - inicioCaptura;
+        document.getElementById('gps-tempo').innerText = Math.floor(decorrido / 1000);
+        document.getElementById('gps-barra-tempo').style.width = Math.min(100, (decorrido / TEMPO_MAX_MS) * 100) + '%';
+        document.getElementById('btn-fixar-agora').disabled = !(melhorLeitura && decorrido >= 3000);
+
+        if (melhorLeitura && decorrido >= TEMPO_MIN_MS && melhorLeitura.precisao <= PRECISAO_OK_M) {
+            finalizarCaptura();
+        } else if (decorrido >= TEMPO_MAX_MS) {
+            if (melhorLeitura) {
+                finalizarCaptura();
+            } else {
+                pararCaptura();
+                document.getElementById('painel-gps').classList.add('hidden');
+                document.getElementById('btn-capturar').classList.remove('hidden');
+                alert("O GPS não respondeu. Vá para um local aberto, confira se a localização está ligada e tente de novo.");
+            }
+        }
+    }
+
+    function pararCaptura() {
+        if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+        if (timerId !== null) { clearInterval(timerId); timerId = null; }
+        soltarWakeLock();
+    }
+
+    function cancelarCaptura() {
+        pararCaptura();
+        document.getElementById('painel-gps').classList.add('hidden');
+        document.getElementById('btn-capturar').classList.remove('hidden');
+    }
+
+    function finalizarCaptura() {
+        if (!melhorLeitura) return;
+        const leituras = totalLeituras;
+        const melhor = melhorLeitura;
+        pararCaptura();
+        setPasso(5);
+        coordFixada = { lat: melhor.lat, lng: melhor.lng, precisao: melhor.precisao, dataHora: new Date().toISOString(), leituras };
+        if (navigator.vibrate) navigator.vibrate(200);
+        setTimeout(() => {
+            document.getElementById('painel-gps').classList.add('hidden');
+            mostrarResultado();
+        }, 600);
+    }
+
+    function mostrarResultado() {
+        const c = coordFixada;
+        const q = classificarPrecisao(c.precisao);
+        document.getElementById('btn-capturar').classList.add('hidden');
+        document.getElementById('res-lat').innerText = c.lat.toFixed(6);
+        document.getElementById('res-lng').innerText = c.lng.toFixed(6);
+        document.getElementById('res-precisao').innerText = `±${Math.round(c.precisao)} m`;
+        const elQ = document.getElementById('res-qualidade');
+        elQ.innerText = q.texto;
+        elQ.className = `font-bold ${q.cor}`;
+        const quando = new Date(c.dataHora).toLocaleString('pt-BR');
+        document.getElementById('res-data').innerText = `Capturada em ${quando}` + (c.leituras ? ` · ${c.leituras} leituras analisadas` : '');
+        document.getElementById('res-aviso').classList.toggle('hidden', c.precisao <= PRECISAO_FRACA_M);
+        document.getElementById('painel-resultado').classList.remove('hidden');
+    }
+
+    function abrirCoordenadaNoMapa() {
+        if (!coordFixada) return;
+        window.open(`https://www.google.com/maps/search/?api=1&query=${coordFixada.lat},${coordFixada.lng}`, '_blank');
+    }
+
+    // =================================================================
+    // FOTOS (compressão + carimbo)
+    // =================================================================
+    function configurarBotaoFoto(num) {
+        const btn = document.getElementById('btn-foto-' + num);
+        const rotulo = num === 1 ? 'Hidrômetro' : 'Fachada';
+        if (cacheFotos[num]) {
+            btn.innerHTML = `✅ Foto ${num} pronta`;
+            btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-500');
+        } else {
+            btn.innerHTML = `📸 Foto ${num} (${rotulo})`;
+            btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-500');
+        }
+    }
+
+    function processarFoto(num) {
+        const arquivo = document.getElementById('input-foto-' + num).files[0];
+        if (!arquivo) return;
+        const status = document.getElementById('status-foto');
+        status.innerText = '⚡ Otimizando imagem...';
+        status.className = 'text-[10px] text-amber-400 mt-2 text-center animate-pulse';
+
+        const leitor = new FileReader();
+        leitor.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1280;
+                let w = img.width, h = img.height;
+                if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+                else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                cacheFotos[num] = canvas.toDataURL('image/jpeg', 0.7);
+                fotoNova[num] = true;
+                configurarBotaoFoto(num);
+                status.innerText = 'Foto processada. O carimbo será aplicado ao salvar.';
+                status.className = 'text-[10px] text-emerald-400 mt-2 text-center';
+            };
+            img.src = e.target.result;
+        };
+        leitor.readAsDataURL(arquivo);
+    }
+
+    // Desenha uma faixa escura no rodapé da foto com código, coordenada e data
+    function carimbarFoto(dataUrl, linhas) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const tam = Math.max(14, Math.round(img.width / 38));
+                const alturaFaixa = tam * (linhas.length + 1) + 8;
+                ctx.fillStyle = 'rgba(0,0,0,0.65)';
+                ctx.fillRect(0, img.height - alturaFaixa, img.width, alturaFaixa);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${tam}px monospace`;
+                linhas.forEach((t, i) => ctx.fillText(t, 8, img.height - alturaFaixa + tam * (i + 1) + 2));
+                resolve(canvas.toDataURL('image/jpeg', 0.75));
+            };
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        });
+    }
+
+    // =================================================================
+    // SALVAR
+    // =================================================================
+    async function salvarCaptura() {
+        if (!itemAtual) return;
+        const naoLocalizado = document.getElementById('check-nao-localizado').checked;
+        const obs = document.getElementById('input-observacao').value.trim();
+
+        if (naoLocalizado) {
+            if (!obs) { alert("Explique na observação por que o hidrômetro não foi localizado."); return; }
+        } else {
+            if (watchId !== null) { alert("A captura da coordenada ainda está em andamento. Aguarde ou toque em 'Fixar melhor leitura agora'."); return; }
+            if (!coordFixada) { alert("Capture a coordenada antes de salvar."); return; }
+            if (!cacheFotos[1]) { alert("A Foto 1 (hidrômetro) é obrigatória."); return; }
+            if (coordFixada.precisao > PRECISAO_FRACA_M) {
+                const ok = confirm(`A precisão está fraca (±${Math.round(coordFixada.precisao)} m).\n\nSalvar mesmo assim? O ideal é capturar de novo em local mais aberto.`);
+                if (!ok) return;
+            }
+        }
+
+        const btn = document.getElementById('btn-salvar');
+        const textoBtn = btn.innerHTML;
+        btn.innerHTML = 'Salvando...';
+        btn.disabled = true;
+
+        try {
+            const item = itemAtual;
+            let foto1 = cacheFotos[1], foto2 = cacheFotos[2];
+
+            if (!naoLocalizado && coordFixada) {
+                const quando = new Date(coordFixada.dataHora).toLocaleString('pt-BR');
+                const linhas = [
+                    `FORN ${item.codigo} | HD ${item.hidrometro}`,
+                    `${coordFixada.lat.toFixed(6)}, ${coordFixada.lng.toFixed(6)} (±${Math.round(coordFixada.precisao)} m)`,
+                    quando
+                ];
+                if (foto1 && fotoNova[1]) foto1 = await carimbarFoto(foto1, linhas);
+                if (foto2 && fotoNova[2]) foto2 = await carimbarFoto(foto2, linhas);
+            }
+
+            item.observacao = obs;
+            item.foto1 = foto1;
+            item.foto2 = foto2;
+            if (naoLocalizado) {
+                item.status = 'nao_localizado';
+                item.latitude = null; item.longitude = null; item.precisao = null;
+                item.dataHora = new Date().toISOString();
+            } else {
+                item.status = 'capturado';
+                item.latitude = coordFixada.lat;
+                item.longitude = coordFixada.lng;
+                item.precisao = coordFixada.precisao;
+                item.dataHora = coordFixada.dataHora;
+            }
+
+            await salvarItemNoBanco(item);
+
+            salvamentosDesdeBackup++;
+            if (salvamentosDesdeBackup >= LEITURAS_ENTRE_BACKUPS) {
+                salvamentosDesdeBackup = 0;
+                exportarZIP(true);
+            }
+
+            mostrarToast('✅ Salvo no aparelho.');
+            fecharCaptura();
+            verificarEspacoArmazenamento();
+        } catch (erro) {
+            console.error(erro);
+            alert("⚠️ NÃO foi possível salvar (o armazenamento do aparelho pode estar cheio). Exporte o ZIP e libere espaço antes de continuar.");
+        } finally {
+            btn.innerHTML = textoBtn;
+            btn.disabled = false;
+        }
+    }
+
+    // =================================================================
+    // EXPORTAÇÃO / BACKUP (ZIP)
+    // =================================================================
+    function montarZIP(registros) {
+        const zip = new JSZip();
+        const pasta = zip.folder("Fotos");
+        const leiturista = nomeLeiturista().replace(/[;\n\r]/g, ' ');
+        let csv = "fornecimento;hidrometro;endereco;status;latitude;longitude;precisao_m;data_hora;leiturista;observacao\n";
+        let qtd = 0;
+        registros.forEach(i => {
+            if (i.status === 'pendente') return;
+            qtd++;
+            const lat = i.latitude != null ? i.latitude.toFixed(7) : '';
+            const lng = i.longitude != null ? i.longitude.toFixed(7) : '';
+            const prec = i.precisao != null ? i.precisao.toFixed(1) : '';
+            const limpa = (t) => String(t == null ? '' : t).replace(/[;\r\n]+/g, ' ');
+            csv += `${limpa(i.codigo)};${limpa(i.hidrometro)};${limpa(i.endereco)};${i.status};${lat};${lng};${prec};${i.dataHora || ''};${leiturista};${limpa(i.observacao)}\n`;
+            if (i.foto1) pasta.file(`${i.codigo}_${i.hidrometro}_1.jpg`.replace(/[\\/:*?"<>|]/g, '-'), i.foto1.split(',')[1], { base64: true });
+            if (i.foto2) pasta.file(`${i.codigo}_${i.hidrometro}_2.jpg`.replace(/[\\/:*?"<>|]/g, '-'), i.foto2.split(',')[1], { base64: true });
+        });
+        zip.file("Coordenadas.csv", "﻿" + csv);
+        return { zip, qtd };
+    }
+
+    function baixarBlob(blob, nome) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = nome;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 30000);
+    }
+
+    function carimboDataHora() {
+        const agora = new Date();
+        return `${agora.toISOString().split('T')[0]}_${agora.toTimeString().slice(0, 5).replace(':', 'h')}`;
+    }
+
+    // automatico=true: backup periódico em segundo plano, sem travar botão nem alertar
+    async function exportarZIP(automatico = false) {
+        const { zip, qtd } = montarZIP(itens);
+        if (qtd === 0) {
+            if (!automatico) alert("Nenhuma coordenada capturada para exportar ainda.");
+            return;
+        }
+        const btn = document.getElementById('btn-exportar-zip');
+        if (!automatico) { btn.innerText = "⏳ GERANDO ZIP..."; btn.disabled = true; }
+        try {
+            const blob = await zip.generateAsync({ type: "blob" });
+            baixarBlob(blob, automatico ? `Backup_Auto_${carimboDataHora()}.zip` : `Coordenadas_${carimboDataHora()}.zip`);
+            if (automatico) mostrarToast(`💾 Backup automático salvo (${qtd} registros) em Downloads.`);
+        } catch (e) {
+            console.error(e);
+            if (!automatico) alert("Falha ao gerar o ZIP.");
+        } finally {
+            if (!automatico) { btn.innerText = "📦 EXPORTAR COORDENADAS (ZIP)"; btn.disabled = false; }
+        }
+    }
+
+    // Antes de trocar a lista, baixa o ZIP do que já foi feito
+    async function backupAntesDeSubstituir() {
+        try {
+            const { zip, qtd } = montarZIP(itens);
+            if (qtd === 0) return;
+            const blob = await zip.generateAsync({ type: "blob" });
+            baixarBlob(blob, `Backup_Antes_Substituir_${carimboDataHora()}.zip`);
+            await pausar(1500);
+            mostrarToast(`💾 Backup salvo antes de substituir (${qtd} registros).`);
+        } catch (e) {
+            console.error(e);
+            alert("⚠️ Não foi possível gerar o ZIP de backup antes de substituir a lista.");
+        }
+    }
+
+    // =================================================================
+    // INICIALIZAÇÃO
+    // =================================================================
+    window.addEventListener('load', () => {
+        solicitarArmazenamentoPersistente();
+        verificarEspacoArmazenamento();
+        document.getElementById('input-leiturista').value = nomeLeiturista();
+        definirFiltro('todos');
+    });
+    </script>
+</body>
+</html>
